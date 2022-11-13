@@ -1,0 +1,45 @@
+{
+    "name": "Survey Shuffle",
+    "namespace": "INTERSECT\\SurveyShuffle",
+    "description": "Shuffles Surveys; Displays selected surveys to respondents in a random order. Displayed sequence can be stored in a text field. The number of displayed surveys can be configured to be less than the number of survey instruments being shuffled.",
+    "framework-version": 7,
+    "permissions": [
+        "redcap_survey_complete"
+    ],
+    "authors": [
+        {
+            "name": "Aidan Wilson",
+            "email": "aidan.wilson@intersect.org.au",
+            "institution": "Intersect Australia"
+        }
+    ],
+    "project-settings": [
+        {
+            "key": "shuffle-instruments",
+            "name": "Instruments to be shuffled (initial instrument cannot be shuffled)",
+            "type": "form-list",
+            "repeatable": true
+        },
+        {
+            "key": "shuffle-number",
+            "name": "Number of instruments to display (if empty, less than 1, more than the number of selected instruments, or NaN, then all instruments will be displayed)",
+            "type": "text"
+        },
+        {
+            "key": "prior-survey",
+            "name": "Survey whose submission triggers the random display of shuffle instruments (if unset, shuffle instruments will begin displaying after the submission of the initial survey, which itself cannot be shuffled).",
+            "type": "form-list"
+        },
+        {
+            "key": "exit-survey",
+            "name": "Survey to which to direct respondents when all shuffled surveys have been displayed (if unset, survey terminations option of last displayed survey will take effect)",
+            "type": "form-list"
+        },
+        {
+            "key": "sequence-field",
+            "name": "Field to be used to store survey display order (typically hidden and readonly)",
+            "type": "field-list",
+            "field-type": "text"
+        }
+    ]
+}
