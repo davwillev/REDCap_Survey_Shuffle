@@ -17,7 +17,6 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
         $exit_survey = $this -> getProjectSetting('exit-survey');
         $prior_survey = $this -> getProjectSetting('prior-survey');
         $sequence_field = $this -> getProjectSetting('sequence-field');
-        $record_id_field = REDCap::getRecordIdField();
 
         // Set the number of instruments to shuffle to the number requested, or else the number of instruments being shuffled
         $shuffle_number = (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0) ? $shuffle_number : count($shuffle_instruments);
@@ -43,17 +42,17 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                 $next_survey = $shuffle_instruments[0]; // Pick a remaining instrument at random
                 if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, let's do so.
                     $sequence_data_curr = REDCap::getData('array',$record,$sequence_field,$event_id)[$record][$event_id][$sequence_field];
-                    $params = array('dataFormat'=>'json', 'type'=>'flat', 'data'=>'[{"'.$record_id_field.'":"'.$record.'","'.$sequence_field.'":"'.$sequence_data_curr.$next_survey.', "}]');
-                    REDCap::saveData($params);
+                    $sequence_new_data = (strlen($sequence_data_curr) == 0) ? $next_survey : $sequence_data_curr.", ".$next_survey;
+                    $this->setData($record,$sequence_field,$sequence_new_data);
                 };
                 $next_survey_link = REDCap::getSurveyLink($record, $next_survey); // Get the next survey's link
                 header('Location: '.$next_survey_link); // And direct the respondent there
-                exit();
+                $this->exitAfterHook();
             } else { // If we're done
                 if (!is_null($exit_survey)) { // Test if there's a configured end-survey
                     $exit_survey_link = REDCap::getSurveyLink($record, $exit_survey);
                     header('Location: '.$exit_survey_link); // Go there
-                    exit();
+                    $this->exitAfterHook();
                 };
             }; // Otherwise do whatever the survey termination options have configured.
         };
