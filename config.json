@@ -2,7 +2,7 @@
     "name": "Survey Shuffle",
     "namespace": "INTERSECT\\SurveyShuffle",
     "description": "Shuffles Surveys; Displays selected surveys to respondents in a random order.",
-    "framework-version": 7,
+    "framework-version": 8,
     "compatibility": {
       "php-version-min": "7.3.0",
       "redcap-version-min": "11.4.0"
