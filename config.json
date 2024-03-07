@@ -2,15 +2,10 @@
     "name": "Survey Shuffle",
     "namespace": "INTERSECT\\SurveyShuffle",
     "description": "Shuffles Surveys; Displays selected surveys to respondents in a random order.",
-    "framework-version": 8,
+    "framework-version": 12,
     "compatibility": {
-      "php-version-min": "7.3.0",
-      "redcap-version-min": "11.4.0"
+      "php-version-min": "7.3.0"
     },
-    "permissions": [
-        "redcap_survey_complete",
-        "redcap_survey_page"
-    ],
     "authors": [
         {
             "name": "Aidan Wilson",
@@ -19,6 +14,12 @@
         }
     ],
     "project-settings": [
+        {
+            "key": "config-description",
+            "name": "Due to a known issue with branching logic and sub-settings in module configuration, some settings below will only apply for type 'Randomised' and some for type 'From Field'.",
+            "type": "descriptive"
+
+        },
         { 
             "key": "configs",
             "name": "Sequence configuration",
@@ -31,13 +32,33 @@
                     "type": "event-list"
                 },
                 {
+                    "key": "shuffle-type",
+                    "name": "Shuffle type; use 'Randomised' to select instruments to shuffle and randomly generate a sequence for each survey respondent. If the order is to be determined by a field, such as a previously stored sequence, use 'From field'.<br/><em>Typically you would use the 'Shuffle' type for the first event, and then use the storedm sequence field for subsequent events.</em>",
+                    "type": "dropdown",
+                    "choices": [
+                        {
+                            "value": "random",
+                            "name": "Randomised"
+                        },
+                        {
+                            "value": "field",
+                            "name": "From field"
+                        }
+                    ]
+                },
+                {
                     "key": "entry-survey",
-                    "name": "Entry survey; survey whose submission triggers the random display of shuffle instruments<br/><em>If unset, shuffled instruments will begin displaying after the submission of the initial survey, which itself cannot be shuffled</em>.",
+                    "name": "Entry survey; survey whose submission triggers the shuffling shuffle instruments<br/><em>If unset, shuffled instruments will begin displaying after the submission of the initial survey, which itself cannot be shuffled</em>.",
+                    "type": "form-list"
+                },
+                {
+                    "key": "exit-survey",
+                    "name": "Exit survey; survey to which to direct respondents when all shuffled surveys have been displayed<br/><em>if unset, survey terminations option of last displayed survey will take effect</em>",
                     "type": "form-list"
                 },
                 {
                     "key": "descriptive-text",
-                    "name": "Instruments to be shuffled<br/> <em>initial instrument cannot be shuffled</em>",
+                    "name": "Instruments to be shuffled<br/> <em>initial instrument cannot be shuffled</em><br/><strong>Only applies to <em>Randomised</em> shuffle type.</strong>",
                     "type": "descriptive"
                 },
                 {
@@ -48,19 +69,30 @@
                 },
                 {
                     "key": "shuffle-number",
-                    "name": "Number of instruments to display<br/><em>if empty, less than 1, more than the number of selected instruments, or NaN, then all instruments will be displayed</em>",
+                    "name": "Number of instruments to display<br/><em>if empty, less than 1, more than the number of selected instruments, or NaN, then all instruments will be displayed</em><br/><strong>Only applies to <em>Randomised</em> shuffle type.</strong>",
                     "type": "text"
                 },
                 {
-                    "key": "exit-survey",
-                    "name": "Exit survey; survey to which to direct respondents when all shuffled surveys have been displayed<br/><em>if unset, survey terminations option of last displayed survey will take effect</em>",
-                    "type": "form-list"
-                },
-                {
                     "key": "sequence-field",
-                    "name": "Field to be used to store survey sequence<br/><em>typically hidden and readonly; must be designated on the current event if longitudinal</em>",
+                    "name": "Field to be used to store survey sequence<br/><em>typically hidden and readonly; must be designated on the current event if longitudinal</em><br/><strong>Only applies to <em>Randomised</em> shuffle type.</strong>",
                     "type": "field-list",
                     "field-type": "text"
+                },
+                {
+                    "key": "sequence-field-event",
+                    "name": "Event in which the sequence field is located.<br/><em>Leave blank if not longitudinal or to use current event</em><br/><strong>Only applies to <em>Randomised</em> shuffle type.</strong>",
+                    "type": "event-list"
+                },
+                {
+                    "key": "order-field",
+                    "name": "Stored sequence field; field that stores the pre-determined sequence to be used<br/><em>must contain a comma separated list of unique form names</em><br/><strong>Only applies to <em>From Field</em> shuffle type.</strong>",
+                    "type": "field-list",
+                    "field-type": "text"
+                },
+                {
+                    "key": "order-field-event",
+                    "name": "Event for the stored sequence field.<br/><em>Leave blank if not longitudinal or to use current event</em><br/><strong>Only applies to <em>From Field</em> shuffle type.</strong>",
+                    "type": "event-list"
                 }
             ]
         }

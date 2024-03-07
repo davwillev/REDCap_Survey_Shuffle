@@ -14,15 +14,27 @@ Clone the repository and rename the directory to include a version number, e.g.,
 
 ## Usage
 
-In the project's module configuration, add instruments to be shuffled from the drop-down menu. If the `entry-survey` option is set in the configuration, randomisation will commence on completion of this instrument, otherwise randomisation commences upon completion of the first instrument. Since this module makes use of the `redcap_survey_complete` hook, randomisation of instruments cannot take place until at least one survey is completed, and as such, the first survey cannot be shuffled.
+### Shuffle Type
 
-An `exit-survey` configuration option allows users to direct respondents to a single survey upon completion of the battery of shuffled surveys. If this is not set, then the survey termination option of the final displayed instrument takes effect.
+This module allows for two types of survey shuffling: randomised and From Field, for retrieving a predetermined sequence.
 
-Users can set a number of instruments to be displayed. For example, in a battery of ten survey instruments, respondents can be administered a random five before being directed to the `exit-survey` (or, the survey termination option of the fifth displayed survey).
+For the **Randomised** shuffle type, users may specify a set of instruments to be presented in a random order. 
 
-Just which survey instruments were administered can be seen by looking at the instruments' complete status fields, but the order in which they were administered can be stored in a text field using the `sequence-field` configuration option in the format `form_3, form_1, form_2`. Typically, this field would be `@HIDDEN` and `@READONLY`. Using `@SETVALUE` on a checkbox field with options coded as the unique names can effectively store the displayed instruments as an enumerated field that is then available for data quality checking and reporting.
+In the module configuration, add the instruments to be shuffled from the drop-down menu. If the `entry-survey` option is set, the shuffling will start after this survey is completed. If not, the shuffling starts after the first survey is completed. Note that as this module uses the `redcap_survey_complete` hook,at least one survey must be completed before the shuffling can start. This means the first survey is not eligible to be shuffled. 
 
-Multiple sequences can be configured and sequences can be limited to specific longitudinal events. This allows for a different battery of surveys in different events. It also allows for a single battery of surveys comprising separately shuffled sections. Users may need to configure a bridge instrument to act as the `exit_survey` of one shuffled sequence and the `entry_survey` of the next, otherwise respondents may not be directed through the instruments correctly.
+Users may also set an `exit-survey` which will be presented to the respondents after they complete the shuffled surveys. If this is not set, the termination option of the last displayed survey will be used as a fallback.
+
+Users may specify the number of instruments to be displayed. For example, if you have ten instruments, you can choose to display a random five of them before sending respondents to the `exit-survey`.
+
+The order of the administered surveys can be stored in a text field specified by the `sequence-field` configuration option. This field is typically set as `@HIDDEN` and `@READONLY`. You can use the value of this field with `@SETVALUE` on a checkbox field to store the displayed instruments within the record for data quality checking and reporting, for example, to report on the relative proportion of surveys displayed.
+
+Users may configure multiple sequences and limit them to specific longitudinal events. This allows for different sets of surveys in different events, or a single set of surveys with separately shuffled sections. A bridging instrument may be necessary for multiple sequences in one event to act as the `exit_survey` of one sequence and the `entry_survey` of the next to ensure correct navigation through the instruments.
+
+For the **From Field** shuffle type, a variable may be used to supply a predetermined sequence of instruments. This setting is useful where respondents are required to complete surveys in a randomised order in the first case, and then in the same order in subsequent cases. This predetermined sequence overrides the list of instruments to be shuffled and the number to shuffle, and it will prevent the sequence being stored (as it was already stored in the variable it was retrieved from).
+
+### Branching Logic in Module Configuration Settings
+
+Due to a known issue with REDCap's External Module Framework, module sub-settings do not play well with branching logic. This means that configuration settings cannot be hidden where they are not relevant. So, settings relating to the **Randomised** shuffle type and settings relating to the **From Field** shuffle type are always shown.
 
 ## Limitations
 
@@ -33,4 +45,4 @@ The method used to randomly select a survey does not allow for balancing the adm
 ## TODO
 
 - Investigate support for repeating instruments.
-- Allow for surveys to be administered in a pre-determined order by reading the sequence field, that is, administering surveys in an order defined elsewhere. Or maybe that's a different module entirely.
+- ~Allow for surveys to be administered in a pre-determined order by reading the sequence field, that is, administering surveys in an order defined elsewhere. Or maybe that's a different module entirely.~ Added in version 2.0.0.
