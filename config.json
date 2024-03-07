@@ -48,7 +48,7 @@
                 },
                 {
                     "key": "entry-survey",
-                    "name": "Entry survey; survey whose submission triggers the shuffling shuffle instruments<br/><em>If unset, shuffled instruments will begin displaying after the submission of the initial survey, which itself cannot be shuffled</em>.",
+                    "name": "Entry survey; survey whose submission triggers the shuffling of instruments<br/><em>If unset, shuffled instruments will begin displaying after the submission of the initial survey, which itself cannot be shuffled</em>.",
                     "type": "form-list"
                 },
                 {
