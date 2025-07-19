@@ -33,9 +33,14 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             $sequence_field = $this -> getProjectSetting('sequence-field')[$i];
             $sequence_field_event = $this -> getProjectSetting('sequence-field-event')[$i];
 
+            // Exit if entry survey is not set, or if no shuffle instruments are defined
+            if (empty($entry_survey) || empty($shuffle_instruments)) {
+                return;
+            }
+
             if (is_null($shuffle_event) || $event_id == $shuffle_event ) { // proceed if the current event is the config event, or if no event is specified
                 if (is_null($shuffle_type) || $shuffle_type == "random") { // proceed if the shuffle type is set to shuffle, or if no type is specified (for backwards compatibility)
-            
+
                     // Set the number of instruments to shuffle to the number requested, or else the number of instruments being shuffled
                     $shuffle_number = (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0) ? $shuffle_number : count($shuffle_instruments);
 
