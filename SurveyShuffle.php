@@ -93,7 +93,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
     /**
      * Runs when a data entry form is opened (top of form).
-     * Executes the same logic when the shuffle context includes forms.
+     * Now supports event-specific form shuffling (longitudinal projects).
      */
     function redcap_data_entry_form_top($project_id, $record, $instrument, $event_id, $group_id, $repeat_instance)
     {
@@ -105,9 +105,10 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
         $configs = $this->getProjectSetting('configs');
 
         for ($i = 0; $i < count($configs); $i++) {
+            // Get settings for this configuration
             $shuffle_event = $this->getProjectSetting('shuffle-event')[$i];
             $shuffle_type = $this->getProjectSetting('shuffle-type')[$i];
-            $entry_survey = $this->getProjectSetting('entry-survey')[$i]; // Treated here as entry form
+            $entry_survey = $this->getProjectSetting('entry-survey')[$i]; // entry form
             $shuffle_instruments = $this->getProjectSetting('shuffle-instruments')[$i];
             $sequence_field = $this->getProjectSetting('sequence-field')[$i];
             $sequence_field_event = $this->getProjectSetting('sequence-field-event')[$i];
@@ -115,20 +116,27 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             $order_field_event = $this->getProjectSetting('order-field-event')[$i];
             $shuffle_number = $this->getProjectSetting('shuffle-number')[$i];
 
+            // Skip configs without entry form or shuffle list
             if (empty($entry_survey) || empty($shuffle_instruments)) continue;
 
+            // Event filtering (only run for matching event or if none specified) ---
+            if (!empty($shuffle_event) && $shuffle_event != $event_id) continue;
+
+            // Check if current instrument is the designated entry form
             if ($entry_survey == $instrument) {
 
-                // Initialise variable for potential reuse
                 $shuffle_array = [];
 
                 if ($shuffle_type == 'random') {
                     $shuffle_array = $shuffle_instruments;
                     shuffle($shuffle_array);
+
+                    // Trim if subset requested
                     if (!empty($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($shuffle_instruments)) {
                         $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
                     }
 
+                    // Save shuffled order if requested
                     if (!empty($sequence_field)) {
                         $sequence_event = (!empty($sequence_field_event)) ? $sequence_field_event : $event_id;
                         $sequence_value = implode(",", $shuffle_array);
@@ -141,8 +149,6 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         ]);
                     }
 
-                    // Forms do not auto-redirect; any subsequent navigation must be handled manually
-
                 } elseif ($shuffle_type == 'field') {
                     if (!empty($order_field)) {
                         $sequence_event = (!empty($order_field_event)) ? $order_field_event : $event_id;
@@ -154,16 +160,13 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     }
                 }
 
-                // --- New code: Override "Save & Go to Next Form" to follow shuffled order ---
+                // --- Override "Save & Go to Next Form" button to follow shuffled order ---
                 if (!empty($shuffle_array)) {
                     $current_index = array_search($instrument, $shuffle_array);
                     if ($current_index !== false && isset($shuffle_array[$current_index + 1])) {
                         $next_form = $shuffle_array[$current_index + 1];
-
-                        // Build the correct URL for the next form
                         $next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
 
-                        // Inject JavaScript to override button behaviour
                         echo "
                         <script>
                         $(function(){
@@ -171,7 +174,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                             if(btn.length){
                                 btn.off('click').on('click', function(e){
                                     e.preventDefault();
-                                    // Submit the form normally
+                                    // Submit form normally
                                     $('form#form').submit();
                                     // Redirect to next form after short delay
                                     setTimeout(function(){
