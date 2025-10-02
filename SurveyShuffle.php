@@ -118,6 +118,10 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             if (empty($entry_survey) || empty($shuffle_instruments)) continue;
 
             if ($entry_survey == $instrument) {
+
+                // Initialise variable for potential reuse
+                $shuffle_array = [];
+
                 if ($shuffle_type == 'random') {
                     $shuffle_array = $shuffle_instruments;
                     shuffle($shuffle_array);
@@ -138,15 +142,46 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     }
 
                     // Forms do not auto-redirect; any subsequent navigation must be handled manually
-                }
-                elseif ($shuffle_type == 'field') {
+
+                } elseif ($shuffle_type == 'field') {
                     if (!empty($order_field)) {
                         $sequence_event = (!empty($order_field_event)) ? $order_field_event : $event_id;
                         $data = REDCap::getData($project_id, 'array', $record, $order_field, $sequence_event);
                         $order_value = reset($data)[$sequence_event][$order_field] ?? null;
                         if (!empty($order_value)) {
-                            // Placeholder for handling predefined form order
+                            $shuffle_array = explode(',', $order_value);
                         }
+                    }
+                }
+
+                // --- New code: Override "Save & Go to Next Form" to follow shuffled order ---
+                if (!empty($shuffle_array)) {
+                    $current_index = array_search($instrument, $shuffle_array);
+                    if ($current_index !== false && isset($shuffle_array[$current_index + 1])) {
+                        $next_form = $shuffle_array[$current_index + 1];
+
+                        // Build the correct URL for the next form
+                        $next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
+
+                        // Inject JavaScript to override button behaviour
+                        echo "
+                        <script>
+                        $(function(){
+                            var btn = $(\"button[name='submit-btn-saverecord_nextform']\");
+                            if(btn.length){
+                                btn.off('click').on('click', function(e){
+                                    e.preventDefault();
+                                    // Submit the form normally
+                                    $('form#form').submit();
+                                    // Redirect to next form after short delay
+                                    setTimeout(function(){
+                                        window.location.href = '{$next_url}';
+                                    }, 500);
+                                });
+                            }
+                        });
+                        </script>
+                        ";
                     }
                 }
             }
