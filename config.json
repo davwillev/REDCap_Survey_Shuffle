@@ -15,6 +15,17 @@
     ],
     "project-settings": [
         {
+            "key": "shuffle-context",
+            "name": "Shuffle Context",
+            "type": "dropdown",
+                "choices": [
+                        { "value": "survey", "name": "Surveys only" },
+                        { "value": "form", "name": "Data entry forms only" },
+                        { "value": "both", "name": "Both surveys and forms" }
+                        ],
+                "default": "survey"
+        },
+        {
             "key": "config-description",
             "name": "Due to a known issue with branching logic and sub-settings in module configuration, some settings below will only apply for type 'Randomised' and some for type 'From Field'.",
             "type": "descriptive"
