@@ -1,6 +1,13 @@
 # REDCap Survey Shuffle
 
 This REDCap External Module allows users to shuffle surveys such that they are displayed to respondents in a random order, and the order in which they were displayed can be stored in a text variable.
+Also supports data entry forms, allowing users to define randomised or field-based ordering of forms.
+It can be configured to shuffle:
+	•	Surveys only,
+	•	Data entry forms only, or
+	•	Both.
+
+Each configuration is event-specific, making it compatible with longitudinal projects. This ensures that different events can have their own independent shuffling rules for surveys or forms.
 
 ## Installation
 
@@ -16,17 +23,20 @@ Clone the repository and rename the directory to include a version number, e.g.,
 
 ### Shuffle Type
 
-This module allows for two types of survey shuffling: randomised and From Field, for retrieving a predetermined sequence.
+This module allows for two types of survey/form shuffling: randomised and From Field, for retrieving a predetermined sequence.
 
 For the **Randomised** shuffle type, users may specify a set of instruments to be presented in a random order. 
 
-In the module configuration, add the instruments to be shuffled from the drop-down menu. If the `entry-survey` option is set, the shuffling will start after this survey is completed. If not, the shuffling starts after the first survey is completed. Note that as this module uses the `redcap_survey_complete` hook,at least one survey must be completed before the shuffling can start. This means the first survey is not eligible to be shuffled. 
+In the module configuration, add the instruments to be shuffled from the drop-down menu. If the `entry-survey` option is set, the shuffling will start after this survey is completed. If not, the shuffling starts after the first survey is completed. Note that as this module uses the `redcap_survey_complete` hook,at least one survey must be completed before the shuffling can start. This means the first survey is not eligible to be shuffled.
 
-Users may also set an `exit-survey` which will be presented to the respondents after they complete the shuffled surveys. If this is not set, the termination option of the last displayed survey will be used as a fallback.
+For data entry forms, the process works similarly, but instead of triggering after survey completion, the shuffle is applied when the entry form is opened in REDCap’s data entry interface.
+Once open, the module automatically determines the next form to be accessed when the user clicks “Save & Go to Next Form”, following the shuffled order rather than the default instrument order.
 
-Users may specify the number of instruments to be displayed. For example, if you have ten instruments, you can choose to display a random five of them before sending respondents to the `exit-survey`.
+Users may also set an `exit-survey` which will be presented to the respondents after they complete the shuffled surveys. If this is not set, the termination option of the last displayed survey will be used as a fallback. This setting is survey-only and not applicable to data entry forms (as data entry users are not redirected upon completion).
 
-The order of the administered surveys can be stored in a text field specified by the `sequence-field` configuration option. This field is typically set as `@HIDDEN` and `@READONLY`. You can use the value of this field with `@SETVALUE` on a checkbox field to store the displayed instruments within the record for data quality checking and reporting, for example, to report on the relative proportion of surveys displayed.
+Users may specify the number of instruments to be displayed. For example, if you have ten instruments, you can choose to display a random five of them before sending respondents to the `exit-survey`. For data entry users, this means that only the specified number of forms will appear in the shuffled sequence when navigating using “Save & Go to Next Form”.
+
+The order of the administered surveys or forms can be stored in a text field specified by the `sequence-field` configuration option. This field is typically set as `@HIDDEN` and `@READONLY`. You can use the value of this field with `@SETVALUE` on a checkbox field to store the displayed instruments within the record for data quality checking and reporting; for example, to report on the relative proportion of surveys displayed.
 
 Users may configure multiple sequences and limit them to specific longitudinal events. This allows for different sets of surveys in different events, or a single set of surveys with separately shuffled sections. A bridging instrument may be necessary for multiple sequences in one event to act as the `exit_survey` of one sequence and the `entry_survey` of the next to ensure correct navigation through the instruments.
 
@@ -34,13 +44,13 @@ For the **From Field** shuffle type, a variable may be used to supply a predeter
 
 ### Branching Logic in Module Configuration Settings
 
-Due to a known issue with REDCap's External Module Framework, module sub-settings do not play well with branching logic. This means that configuration settings cannot be hidden where they are not relevant. So, settings relating to the **Randomised** shuffle type and settings relating to the **From Field** shuffle type are always shown.
+Due to a known issue with REDCap's External Module Framework, module sub-settings do not play well with branching logic. This means that configuration settings cannot be hidden where they are not relevant. So, settings relating to the **Randomised** shuffle type and settings relating to the **From Field** shuffle type are always shown. This applies equally to survey and form contexts.
 
 ## Limitations
 
 There is no support for repeating instruments. If one of the shuffled instruments is repeating and configured to allow the respondent to re-take on submission, the respondent is not directed to the next shuffled survey, but instead is directed to a new instance of the repeating instrument. Only once the respondent clicks *Submit* is the `redcap_survey_complete` hook fired, and so only then will they be taken to the next shuffled survey.
 
-The method used to randomly select a survey does not allow for balancing the administration of surveys across a population; each survey page is only aware of which surveys are not yet completed for the current record, and not how many times each survey has been taken.
+The method used to randomly select a survey or form does not allow for balancing the administration of surveys across a population; each survey page is only aware of which surveys are not yet completed for the current record, and not how many times each survey has been taken.
 
 ## TODO
 
