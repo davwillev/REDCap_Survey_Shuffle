@@ -166,7 +166,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
                     }
 
-                    // Save shuffled order if requested (note delimiter ", " to match survey logic)
+                    // Save shuffled order if requested
                     if (!is_null($sequence_field)) {
                         $sequence_event = $sequence_field_event ?? $event_id;
                         $sequence_value = implode(", ", $shuffle_array);
@@ -186,7 +186,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         $order_value = $data[$record][$sequence_event][$order_field] ?? '';
                         if (strlen($order_value)) {
                             // Match survey delimiter behaviour
-                            $shuffle_array = explode(', ', $order_value);
+                            $shuffle_array = explode(", ", $order_value);
                         }
                     }
                 }
