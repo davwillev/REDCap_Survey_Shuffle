@@ -212,7 +212,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     }
 
                     if (!empty($next_form)) {
-                        $next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
+                        //$next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
+                        $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
 
                         echo "
                         <script>
