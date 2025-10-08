@@ -220,7 +220,11 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     $next_form = $shuffle_array[0] ?? null;
                 } else {
                     // Otherwise, progress to the next item in the shuffled list
-                    $idx = array_search($instrument, $shuffle_array, true);
+                    echo "<!-- Debug: instrument='{$instrument}', shuffle_array=" . json_encode($shuffle_array) . " -->";
+                    //$idx = array_search($instrument, $shuffle_array, true);
+                    // Normalise whitespace to prevent mismatched entries (e.g. " demographics" vs "demographics")
+                    $clean_array = array_map('trim', $shuffle_array);
+                    $idx = array_search($instrument, $clean_array);
                     if ($idx !== false && isset($shuffle_array[$idx + 1])) {
                         $next_form = $shuffle_array[$idx + 1];
                     }
