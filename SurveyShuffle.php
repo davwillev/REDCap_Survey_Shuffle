@@ -154,14 +154,15 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             // Event filter (match or run everywhere if not set)
             if (!is_null($shuffle_event) && $shuffle_event != $event_id) continue;
 
-            // Entry form check
-
             echo "<!-- Config {$i}: entry={$entry_survey}, shuffle_instruments=" . implode(',', (array)$shuffle_instruments) . " -->";
 
+            // Prepare array of instruments for this form
+            $shuffle_array = [];
+
+            // Entry form check
             if ($entry_survey == $instrument) {
 
-                $shuffle_array = [];
-
+                // ENTRY FORM: generate and store shuffled sequence
                 if (is_null($shuffle_type) || $shuffle_type == 'random') {
                     $shuffle_array = $shuffle_instruments;
                     shuffle($shuffle_array);
@@ -196,52 +197,66 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     }
                 }
 
-                // Override "Save & Go to Next Form" to follow shuffled order
-                if (!empty($shuffle_array)) {
-                    $next_form = null;
+            } else {
 
-                    // If we're on the entry form, the next is the FIRST in the shuffled list
-                   if ($instrument === $entry_survey) {
-                        $next_form = $shuffle_array[0] ?? null;
-                    } else {
-                        // Otherwise, progress to the next item in the shuffled list
-                        $idx = array_search($instrument, $shuffle_array, true);
-                        if ($idx !== false && isset($shuffle_array[$idx + 1])) {
-                            $next_form = $shuffle_array[$idx + 1];
-                        }
+                // NON-ENTRY FORMS: retrieve stored sequence (previously saved)
+                if (!empty($sequence_field)) {
+                    $sequence_event = $sequence_field_event ?? $event_id;
+                    $data = REDCap::getData('array', $record, $sequence_field, $sequence_event);
+                    $sequence_value = $data[$record][$sequence_event][$sequence_field] ?? '';
+                    if (strlen($sequence_value)) {
+                        // Match survey delimiter behaviour
+                        $shuffle_array = explode(", ", $sequence_value);
                     }
-
-                    if (!empty($next_form)) {
-                        //$next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
-                        $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
-
-                        echo "
-                        <script>
-                        // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
-                        setTimeout(function() {
-                            var btn = $(\"[name='submit-btn-saverecord_nextform']\");
-                            if (btn.length) {
-                                // Remove inline onclick that calls dataEntrySubmit(this)
-                                btn.attr('onclick','');
-
-                                // Remove any jQuery handlers, then add our own
-                                btn.off('click').on('click', function(e){
-                                    e.preventDefault();
-                                    // Trigger REDCap's normal save (same as 'Save & Stay')
-                                    $(\"[name='submit-btn-saverecord']\").trigger('click');
-
-                                    // After save completes, go to the next shuffled form
-                                    setTimeout(function(){
-                                        window.location.href = '{$next_url}';
-                                    }, 800);
-                                });
-                            }
-                        }, 400);
-                        </script>
-                        ";
-                    }
-                }       
+                }
             }
+
+            // Redirect logic (applies to all shuffled forms)
+            if (!empty($shuffle_array)) {
+                $next_form = null;
+
+                // If we are on the entry form, the next is the FIRST in the shuffled list
+                if ($instrument === $entry_survey) {
+                    $next_form = $shuffle_array[0] ?? null;
+                } else {
+                    // Otherwise, progress to the next item in the shuffled list
+                    $idx = array_search($instrument, $shuffle_array, true);
+                    if ($idx !== false && isset($shuffle_array[$idx + 1])) {
+                        $next_form = $shuffle_array[$idx + 1];
+                    }
+                }
+
+                if (!empty($next_form)) {
+
+                    $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
+
+                    echo "<!-- Shuffle sequence for {$record}: " . implode(' → ', $shuffle_array) . " -->";
+                    echo "
+                    <script>
+                    // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
+                    setTimeout(function() {
+                        var btn = $(\"[name='submit-btn-saverecord_nextform']\");
+                        if (btn.length) {
+                            // Remove inline onclick that calls dataEntrySubmit(this)
+                            btn.attr('onclick','');
+
+                            // Remove any jQuery handlers, then add our own
+                            btn.off('click').on('click', function(e){
+                                e.preventDefault();
+                                // Trigger REDCap's normal save (same as 'Save & Stay')
+                                $(\"[name='submit-btn-saverecord']\").trigger('click');
+
+                                // After save completes, go to the next shuffled form
+                                setTimeout(function(){
+                                    window.location.href = '{$next_url}';
+                                }, 800);
+                            });
+                        }
+                    }, 400);
+                    </script>
+                    ";
+                }
+            }              
         }
     }
 }
