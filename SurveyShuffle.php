@@ -193,31 +193,48 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                 // Override "Save & Go to Next Form" to follow shuffled order
                 if (!empty($shuffle_array)) {
-                    $current_index = array_search($instrument, $shuffle_array);
-                    if ($current_index !== false && isset($shuffle_array[$current_index + 1])) {
-                        $next_form = $shuffle_array[$current_index + 1];
+                    $next_form = null;
+
+                    // If we're on the entry form, the next is the FIRST in the shuffled list
+                   if ($instrument === $entry_survey) {
+                        $next_form = $shuffle_array[0] ?? null;
+                    } else {
+                        // Otherwise, progress to the next item in the shuffled list
+                        $idx = array_search($instrument, $shuffle_array, true);
+                        if ($idx !== false && isset($shuffle_array[$idx + 1])) {
+                            $next_form = $shuffle_array[$idx + 1];
+                        }
+                    }
+
+                    if (!empty($next_form)) {
                         $next_url = REDCap::getDataEntryUrl($project_id, $record, $next_form, $event_id);
 
                         echo "
                         <script>
-                        $(function(){
-                            var btn = $(\"button[name='submit-btn-saverecord_nextform']\");
-                            if(btn.length){
+                        // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
+                        setTimeout(function() {
+                            var btn = $(\"[name='submit-btn-saverecord_nextform']\");
+                            if (btn.length) {
+                                // Remove inline onclick that calls dataEntrySubmit(this)
+                                btn.attr('onclick','');
+
+                                // Remove any jQuery handlers, then add our own
                                 btn.off('click').on('click', function(e){
                                     e.preventDefault();
-                                    // Submit form normally
-                                    $('form#form').submit();
-                                    // Redirect to next form after short delay
+                                    // Trigger REDCap's normal save (same as 'Save & Stay')
+                                    $(\"[name='submit-btn-saverecord']\").trigger('click');
+
+                                    // After save completes, go to the next shuffled form
                                     setTimeout(function(){
                                         window.location.href = '{$next_url}';
-                                    }, 500);
+                                    }, 800);
                                 });
                             }
-                        });
+                        }, 400);
                         </script>
                         ";
                     }
-                }
+                }       
             }
         }
     }
