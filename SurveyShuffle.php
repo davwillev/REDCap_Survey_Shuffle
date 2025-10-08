@@ -132,6 +132,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             return;
         }
 
+        echo "<!-- SurveyShuffle debug: context={$context}, instrument={$instrument}, event={$event_id} -->";
+
         $configs = $this->getProjectSetting('configs');
 
         for ($i = 0; $i < count($configs); $i++) {
@@ -153,6 +155,9 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             if (!is_null($shuffle_event) && $shuffle_event != $event_id) continue;
 
             // Entry form check
+
+            echo "<!-- Config {$i}: entry={$entry_survey}, shuffle_instruments=" . implode(',', (array)$shuffle_instruments) . " -->";
+
             if ($entry_survey == $instrument) {
 
                 $shuffle_array = [];
