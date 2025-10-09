@@ -239,7 +239,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     <script>
                     // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
                     setTimeout(function() {
-                        var btn = $(\"[name='submit-btn-saverecord_nextform']\");
+                        var btn = $(\"[name='submit-btn-savenextform']\");
                         if (btn.length) {
                             // Remove inline onclick that calls dataEntrySubmit(this)
                             btn.attr('onclick','');
