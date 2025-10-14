@@ -243,7 +243,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         var area = $(\"#__SUBMITBUTTONS__-div\");
                         var btn  = area.find(\"[name='submit-btn-savenextform']\");
 
-                        // If the native Next Form button is missing (e.g., on 'pointless'), inject our own
+                        // If the native 'Save & Go To Next Form' button is missing, inject our own
                         if (!btn.length) {
                             var container = area.find('.btn-group.nowrap');
                             if (!container.length) container = area;
@@ -266,7 +266,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                             btn.off('click').on('click', function(e){
                                 e.preventDefault();
 
-                                // Keep prior behaviour: trigger REDCap's normal save (same as your original)
+                                // Keep prior behaviour: trigger REDCap's normal save
                                 $(\"[name='submit-btn-saverecord']\").trigger('click');
 
                                 // After save completes, go to the next shuffled form
