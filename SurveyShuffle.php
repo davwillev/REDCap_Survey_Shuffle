@@ -208,10 +208,21 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         // Match survey delimiter behaviour
                         $shuffle_array = explode(", ", $sequence_value);
                     }
+                } elseif ($shuffle_type === 'field' && !empty($order_field)) {
+                    // Fallback for 'From field' when sequence_field is not used
+                    $sequence_event = $order_field_event ?? $event_id;
+                    $data = REDCap::getData('array', $record, $order_field, $sequence_event);
+                    $order_value = $data[$record][$sequence_event][$order_field] ?? '';
+                    if (strlen(trim($order_value))) {
+                        $shuffle_array = array_map('trim', explode(',', $order_value));  
+                    }
                 }
             }
 
-            // Redirect logic (applies to all shuffled forms)
+            // Redirect logic (applies only on the entry form or one of the configured shuffle instruments)
+            $in_scope = ($instrument === $entry_survey) || in_array($instrument, array_map('trim', (array)$shuffle_instruments));
+            if (!$in_scope) continue;
+
             if (!empty($shuffle_array)) {
                 $next_form = null;
 
@@ -240,8 +251,11 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
                     setTimeout(function() {
                         // Scope to this form's submit area only
-                        var area = $(\"#__SUBMITBUTTONS__-div\");
-                        var btn  = area.find(\"[name='submit-btn-savenextform']\");
+                        var area = $("#__SUBMITBUTTONS__-div");
+                        if (area.data('shuffleWired')) return;  // idempotency guard
+                        area.data('shuffleWired', true);
+
+                        var btn  = area.find("[name='submit-btn-savenextform']");
 
                         // If the native 'Save & Go To Next Form' button is missing, inject our own
                         if (!btn.length) {
@@ -249,9 +263,9 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                             if (!container.length) container = area;
 
                             if (!$('#submit-btn-shuffled-nextform').length) {
-                                var injected = $('<button class=\"btn btn-primaryrc\" ' +
-                                                'id=\"submit-btn-shuffled-nextform\" ' +
-                                                'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
+                                var injected = $('<button class="btn btn-primaryrc" ' +
+                                                'id="submit-btn-shuffled-nextform" ' +
+                                                'style="margin-bottom:2px;font-size:13px !important;padding:6px 8px;">' +
                                                 '<span>Save & Go To Next Form</span></button>');
                                 container.prepend(injected);
                                 btn = injected;
@@ -260,14 +274,24 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                         if (btn.length) {
                             // Remove inline onclick that calls dataEntrySubmit(this)
-                            btn.attr('onclick','');
+                         btn.attr('onclick','');
 
                             // Remove any jQuery handlers, then add our own
                             btn.off('click').on('click', function(e){
                                 e.preventDefault();
 
-                                // Keep prior behaviour: trigger REDCap's normal save
-                                $(\"[name='submit-btn-saverecord']\").trigger('click');
+                                // Prefer REDCap's Save & Stay (avoid Save & Exit unless necessary)
+                                var saveStayBtn  = area.find("button[name='submit-btn-savecontinue']");
+                                var saveStayLink = area.find("a#submit-btn-savecontinue"); // some builds use an <a> in the dropdown
+
+                                if (saveStayBtn.length) {
+                                    saveStayBtn.trigger('click');
+                                } else if (saveStayLink.length) {
+                                    saveStayLink.trigger('click');
+                                } else {
+                                    // Last resort
+                                    area.find("button[name='submit-btn-saverecord']").trigger('click');
+                                }
 
                                 // After save completes, go to the next shuffled form
                                 setTimeout(function(){
