@@ -219,9 +219,14 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                 }
             }
 
-            // Redirect logic (applies only on the entry form or one of the configured shuffle instruments)
-            $in_scope = ($instrument === $entry_survey) || in_array($instrument, array_map('trim', (array)$shuffle_instruments));
-            if (!$in_scope) continue;
+            // Use the order list for scope when we're in "From field" mode; otherwise use shuffle-instruments.
+            $useOrderList = ($shuffle_type === 'field' && !empty($shuffle_array));
+            $scopeList = array_map('trim', $useOrderList ? $shuffle_array : (array)$shuffle_instruments);
+
+            // Gate: only the entry form or a form named in the scope list is affected.
+            if ($instrument !== $entry_survey && !in_array($instrument, $scopeList, true)) {
+                continue; // stop before any next-form calculations or JS injection
+            }
 
             if (!empty($shuffle_array)) {
                 $next_form = null;
