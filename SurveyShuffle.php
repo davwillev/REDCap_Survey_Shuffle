@@ -234,31 +234,62 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                     $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
 
-                    echo "<!-- Shuffle sequence for {$record}: " . implode(' → ', $shuffle_array) . " -->";
-                    echo "
-                    <script>
-                    // Let REDCap finish wiring its default handlers, then replace just this button's behaviour
-                    setTimeout(function() {
-                        var btn = $(\"[name='submit-btn-savenextform']\");
-                        if (btn.length) {
-                            // Remove inline onclick that calls dataEntrySubmit(this)
-                            btn.attr('onclick','');
+                echo "<!-- Shuffle sequence for {$record}: " . implode(' → ', $shuffle_array) . " -->";
+                echo "
+                <script>
+                setTimeout(function () {
+                    var nextUrl = '{$next_url}';
 
-                            // Remove any jQuery handlers, then add our own
-                            btn.off('click').on('click', function(e){
-                                e.preventDefault();
-                                // Trigger REDCap's normal save (same as 'Save & Stay')
-                                $(\"[name='submit-btn-saverecord']\").trigger('click');
+                    function wireNext(btn) {
+                        // Remove inline handler(s) and make it ours
+                        btn.attr('onclick', '');
+                        btn.off('click').on('click', function (e) {
+                            e.preventDefault();
 
-                                // After save completes, go to the next shuffled form
-                                setTimeout(function(){
-                                    window.location.href = '{$next_url}';
-                                }, 800);
-                            });
-                        }
-                    }, 400);
-                    </script>
-                    ";
+                            // Prefer the *button* Save & Stay
+                            var saveAndStayBtn = $(\"button[name='submit-btn-savecontinue']\");
+                            if (saveAndStayBtn.length) {
+                                saveAndStayBtn.trigger('click');
+                            } else {
+                                // Fallback: use the dropdown <a> (same id as the button in some builds)
+                                var saveAndStayLink = $(\"a#submit-btn-savecontinue\");
+                                if (saveAndStayLink.length) {
+                                    saveAndStayLink.trigger('click');
+                                } else {
+                                    // Last resort: Save & Exit (avoid, but better than losing data)
+                                    $(\"button[name='submit-btn-saverecord']\").trigger('click');
+                                }
+                            }
+
+                            // After save completes, go to the shuffled next form
+                            setTimeout(function () {
+                                window.location.href = nextUrl;
+                            }, 800);
+                        });
+                    }
+
+                    // 1) Hijack native 'Save & Go To Next Form' if it exists
+                    var nativeNext = $(\"#submit-btn-savenextform, [name='submit-btn-savenextform']\");
+                    if (nativeNext.length) {
+                        wireNext(nativeNext);
+                        return;
+                    }
+
+                    // 2) Otherwise, inject our own Next Form button near the save controls
+                    var container = $(\"#__SUBMITBUTTONS__-div .btn-group.nowrap\");
+                    if (!container.length) container = $(\"#__SUBMITBUTTONS__-div\");
+
+                    if (!$('#submit-btn-shuffled-nextform').length) {
+                        var ourBtn = $('<button class=\"btn btn-primaryrc\" ' +
+                                    'id=\"submit-btn-shuffled-nextform\" ' +
+                                    'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
+                                    '<span>Save & Go To Next Form</span></button>');
+                        container.prepend(ourBtn);
+                        wireNext(ourBtn);
+                    }
+                }, 400);
+                </script>
+                ";
                 }
             }              
         }
