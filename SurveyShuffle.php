@@ -163,26 +163,39 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             if ($entry_survey == $instrument) {
 
                 // ENTRY FORM: generate and store shuffled sequence
-                if (is_null($shuffle_type) || $shuffle_type == 'random') {
-                    $shuffle_array = $shuffle_instruments;
-                    shuffle($shuffle_array);
-
-                    // Apply limit if requested (keep behaviour analogous to surveys)
-                    if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($shuffle_instruments)) {
-                        $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
-                    }
-
-                    // Save shuffled order if requested
-                    if (!is_null($sequence_field)) {
+                    if (is_null($shuffle_type) || $shuffle_type == 'random') {
+                        // If a sequence field is configured, reuse it if already set to avoid re-shuffling on Save & Stay
                         $sequence_event = $sequence_field_event ?? $event_id;
-                        $sequence_value = implode(", ", $shuffle_array);
-                        REDCap::saveData('array', [
-                            $record => [
-                                $sequence_event => [
-                                    $sequence_field => $sequence_value
-                                ]
-                            ]
-                        ]);
+                        $existing_value = '';
+                        if (!empty($sequence_field)) {
+                            $existing = REDCap::getData('array', $record, $sequence_field, $sequence_event);
+                            $existing_value = $existing[$record][$sequence_event][$sequence_field] ?? '';
+                        }
+
+                        if (strlen(trim($existing_value))) {
+                            // Reuse stored sequence
+                            $shuffle_array = array_map('trim', explode(',', $existing_value));
+                        } else {
+                            // First time only: create sequence
+                            $shuffle_array = $shuffle_instruments;
+                            shuffle($shuffle_array);
+
+                            // Apply limit if requested (keep behaviour analogous to surveys)
+                            if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($shuffle_instruments)) {
+                                $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
+                            }
+
+                            // Save shuffled order if requested
+                            if (!empty($sequence_field)) {
+                                REDCap::saveData('array', [
+                                    $record => [
+                                        $sequence_event => [
+                                            $sequence_field => implode(", ", $shuffle_array)
+                                        ]
+                                    ]
+                                ]);
+                            }
+                        }
                     }
 
                 } else if ($shuffle_type == 'field') {
@@ -248,42 +261,80 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                 if (!empty($next_form)) {
 
+                    // Define the next URL outside of the JS block for cleaner access
                     $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
 
-                    echo "<!-- Shuffle sequence for {$record}: " . implode(' → ', $shuffle_array) . " -->";
                     echo "
                     <script>
-                    setTimeout(function() {
-                        // Scope to this form's submit area only
-                        var area = $(\"#__SUBMITBUTTONS__-div\");
-                        if (area.data('shuffleWired')) return;  // idempotency guard
-                        area.data('shuffleWired', true);
 
-                        var btn  = area.find(\"[name='submit-btn-savenextform']\");
+                    // Use jQuery document ready function, replacing the initial setTimeout (400ms)
+                    $(function() {
+                        // We define these variables outside the click handler to maintain their state
+                        var nextFormUrl   = '{$next_url}';
+                        var saveInProcess = false;
 
-                        // If the native 'Save & Go To Next Form' button is missing, inject our own
-                        if (!btn.length) {
-                            var container = area.find('.btn-group.nowrap');
-                            if (!container.length) container = area;
+                        // Bind after REDCap has wired its own handlers
+                        $(window).on('load', function() {
+                            // Scope to this form's submit area only
+                            var area = $(\"#__SUBMITBUTTONS__-div\");
+                            if (area.data('shuffleWired')) return;  // idempotency guard
+                            area.data('shuffleWired', true);
 
-                            if (!$('#submit-btn-shuffled-nextform').length) {
-                                var injected = $('<button class=\\\"btn btn-primaryrc\\\" ' +
-                                                'id=\\\"submit-btn-shuffled-nextform\\\" ' +
-                                                'style=\\\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\\\">' +
-                                                '<span>Save & Go To Next Form</span></button>');
-                                container.prepend(injected);
-                                btn = injected;
+                            // Try native button first, then the dropdown <a>
+                            var btn  = area.find(\"[name='submit-btn-savenextform']\");
+                            if (!btn.length) {
+                                var btnLink = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                                if (btnLink.length) btn = btnLink;
                             }
-                        }
 
-                        if (btn.length) {
+                            // If neither exists, inject our own
+                            if (!btn.length) {
+                                var container = area.find('.btn-group.nowrap');
+                                if (!container.length) container = area;
+
+                                if (!$('#submit-btn-shuffled-nextform').length) {
+                                    var injected = $('<button class=\"btn btn-primaryrc\" ' +
+                                                    'id=\"submit-btn-shuffled-nextform\" ' +
+                                                    'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
+                                                    '<span>Save & Go To Next Form</span></button>');
+                                    container.prepend(injected);
+                                    btn = injected;
+                                }
+                            }
+
+                            if (!btn.length) return;
+
                             // Remove inline onclick that calls dataEntrySubmit(this)
                             btn.attr('onclick','');
 
                             // Remove any jQuery handlers, then add our own
                             btn.off('click').on('click', function(e){
                                 e.preventDefault();
+                                saveInProcess = true; // Flag that our save is starting
 
+                                // 1. Set up the AJAX listener (must be done before triggering the save)
+                                // Monitors ALL completed AJAX requests on the page (namespaced + one-time to avoid conflicts)
+                                $(document).one('ajaxComplete.SurveyShuffleNext', function(event, xhr, settings) {
+                                    // Check if this is the form save URL and that our custom save process is active
+                                    var isPost        = settings.type && settings.type.toUpperCase() === 'POST';
+                                    var hitsDataEntry = /\\/DataEntry\\/index\\.php/i.test(settings.url);
+
+                                    // Determine current pid robustly
+                                    var currPid = (typeof pid !== 'undefined') ? String(pid) : (function(){
+                                        var m = (window.location.search || '').match(/[?&]pid=(\\d+)/);
+                                        return m ? m[1] : '';
+                                    })();
+                                    var hitsThisPid = currPid ? (settings.url.indexOf('pid=' + currPid) !== -1) : true;
+
+                                    // Ensure it was a success by checking the response status
+                                    if (saveInProcess && isPost && hitsDataEntry && hitsThisPid && xhr.status === 200) {
+                                        // 3. SAVE COMPLETE: Redirect the user
+                                        saveInProcess = false; // Reset flag
+                                        window.location.href = nextFormUrl;
+                                    }
+                                });
+
+                                // 2. Trigger the native save function (start the AJAX save process)
                                 // Prefer REDCap's Save & Stay (avoid Save & Exit unless necessary)
                                 var saveStayBtn  = area.find(\"button[name='submit-btn-savecontinue']\");
                                 var saveStayLink = area.find(\"a#submit-btn-savecontinue\"); // some builds use an <a> in the dropdown
@@ -297,15 +348,20 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                                     area.find(\"button[name='submit-btn-saverecord']\").trigger('click');
                                 }
 
-                                // After save completes, go to the next shuffled form
-                                setTimeout(function(){
-                                    window.location.href = '{$next_url}';
-                                }, 800);
+                                // Optional safety fallback if ajaxComplete never fires (older builds)
+                                setTimeout(function () {
+                                    if (saveInProcess) {
+                                        saveInProcess = false;
+                                        window.location.href = nextFormUrl;
+                                    }
+                                }, 2500);
+
+                                // The redirect logic is handled by the ajaxComplete listener.
                             });
-                        }
-                    }, 400);
-                    </script>
-                    ";
+                        });
+                    });
+
+                    </script>";
                 }
             }              
         }
