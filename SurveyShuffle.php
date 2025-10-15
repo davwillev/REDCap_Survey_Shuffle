@@ -267,11 +267,12 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     echo "
                     <script>
 
-                    // Use jQuery document ready function, replacing the initial setTimeout (400ms)
+                    // Use jQuery document ready function
                     $(function() {
                         // We define these variables outside the click handler to maintain their state
                         var nextFormUrl   = '{$next_url}';
                         var saveInProcess = false;
+                        var ajaxStarted   = false; // NEW: track whether a save AJAX actually started
 
                         // Bind after REDCap has wired its own handlers
                         $(window).on('load', function() {
@@ -280,6 +281,17 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                             if (area.data('shuffleWired')) return;  // idempotency guard
                             area.data('shuffleWired', true);
 
+                            // If no next form (last in shuffled sequence), hide native Next and exit
+                            if (!nextFormUrl || !String(nextFormUrl).trim().length) {
+                                var nativeNext = area.find(\"[name='submit-btn-savenextform'], #submit-btn-savenextform, a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                                nativeNext.each(function(){
+                                    var el = $(this);
+                                    el.hide();                // hide the control itself
+                                    el.closest('li').hide();  // hide dropdown <li> if applicable
+                                });
+                                return; // do not inject or hijack anything on the last shuffled form
+                            }
+                            
                             // Try native button first, then the dropdown <a>
                             var btn  = area.find(\"[name='submit-btn-savenextform']\");
                             if (!btn.length) {
@@ -287,7 +299,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                                 if (btnLink.length) btn = btnLink;
                             }
 
-                            // If neither exists, inject our own
+                            // If neither exists, inject our own button
                             if (!btn.length) {
                                 var container = area.find('.btn-group.nowrap');
                                 if (!container.length) container = area;
@@ -304,6 +316,12 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                             if (!btn.length) return;
 
+                            // Hide any duplicate dropdown 'Next' item to avoid two different Next targets
+                            var dupDropdownNext = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                            if (dupDropdownNext.length && !btn.is(dupDropdownNext)) {
+                                dupDropdownNext.hide().closest('li').hide();
+                            }
+
                             // Remove inline onclick that calls dataEntrySubmit(this)
                             btn.attr('onclick','');
 
@@ -311,6 +329,24 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                             btn.off('click').on('click', function(e){
                                 e.preventDefault();
                                 saveInProcess = true; // Flag that our save is starting
+                                ajaxStarted   = false; // reset before wiring listeners
+
+                                // Detect if the save AJAX actually starts
+                                $(document).one('ajaxSend.SurveyShuffleNext', function(event, jqxhr, settings) {
+                                    var isPost        = settings.type && settings.type.toUpperCase() === 'POST';
+                                    var hitsDataEntry = /\\/DataEntry\\/index\\.php/i.test(settings.url);
+
+                                    // Determine current pid
+                                    var currPid = (typeof pid !== 'undefined') ? String(pid) : (function(){
+                                        var m = (window.location.search || '').match(/[?&]pid=(\\d+)/);
+                                        return m ? m[1] : '';
+                                    })();
+                                    var hitsThisPid = currPid ? (settings.url.indexOf('pid=' + currPid) !== -1) : true;
+
+                                    if (isPost && hitsDataEntry && hitsThisPid) {
+                                        ajaxStarted = true;
+                                    }
+                                });
 
                                 // 1. Set up the AJAX listener (must be done before triggering the save)
                                 // Monitors ALL completed AJAX requests on the page (namespaced + one-time to avoid conflicts)
@@ -319,7 +355,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                                     var isPost        = settings.type && settings.type.toUpperCase() === 'POST';
                                     var hitsDataEntry = /\\/DataEntry\\/index\\.php/i.test(settings.url);
 
-                                    // Determine current pid robustly
+                                    // Determine current pid
                                     var currPid = (typeof pid !== 'undefined') ? String(pid) : (function(){
                                         var m = (window.location.search || '').match(/[?&]pid=(\\d+)/);
                                         return m ? m[1] : '';
@@ -350,7 +386,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
                                 // Optional safety fallback if ajaxComplete never fires (older builds)
                                 setTimeout(function () {
-                                    if (saveInProcess) {
+                                    // Only redirect if a save AJAX actually started (prevents redirect on validation failure)
+                                    if (saveInProcess && ajaxStarted) {
                                         saveInProcess = false;
                                         window.location.href = nextFormUrl;
                                     }
