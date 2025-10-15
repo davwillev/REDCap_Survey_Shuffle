@@ -307,6 +307,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                                 if (!$('#submit-btn-shuffled-nextform').length) {
                                     var injected = $('<button class=\"btn btn-primaryrc\" ' +
                                                     'id=\"submit-btn-shuffled-nextform\" ' +
+                                                    'type=\"button\" ' +
                                                     'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
                                                     '<span>Save & Go To Next Form</span></button>');
                                     container.prepend(injected);
