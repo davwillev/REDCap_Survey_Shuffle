@@ -41,7 +41,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
             // Exit if entry survey is not set, or if no shuffle instruments are defined
             if (empty($entry_survey) || empty($shuffle_instruments)) {
-                return;
+                //return;
+                continue;
             }
 
             if (is_null($shuffle_event) || $event_id == $shuffle_event ) { // proceed if the current event is the config event, or if no event is specified
@@ -163,38 +164,37 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
             if ($entry_survey == $instrument) {
 
                 // ENTRY FORM: generate and store shuffled sequence
-                    if (is_null($shuffle_type) || $shuffle_type == 'random') {
-                        // If a sequence field is configured, reuse it if already set to avoid re-shuffling on Save & Stay
-                        $sequence_event = $sequence_field_event ?? $event_id;
-                        $existing_value = '';
-                        if (!empty($sequence_field)) {
-                            $existing = REDCap::getData('array', $record, $sequence_field, $sequence_event);
-                            $existing_value = $existing[$record][$sequence_event][$sequence_field] ?? '';
+                if (is_null($shuffle_type) || $shuffle_type == 'random') {
+                    // If a sequence field is configured, reuse it if already set to avoid re-shuffling on Save & Stay
+                    $sequence_event = $sequence_field_event ?? $event_id;
+                    $existing_value = '';
+                    if (!empty($sequence_field)) {
+                        $existing = REDCap::getData('array', $record, $sequence_field, $sequence_event);
+                        $existing_value = $existing[$record][$sequence_event][$sequence_field] ?? '';
+                    }
+
+                    if (strlen(trim($existing_value))) {
+                        // Reuse stored sequence
+                        $shuffle_array = array_map('trim', explode(',', $existing_value));
+                    } else {
+                        // First time only: create sequence
+                        $shuffle_array = $shuffle_instruments;
+                        shuffle($shuffle_array);
+
+                        // Apply limit if requested (keep behaviour analogous to surveys)
+                        if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($shuffle_instruments)) {
+                            $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
                         }
 
-                        if (strlen(trim($existing_value))) {
-                            // Reuse stored sequence
-                            $shuffle_array = array_map('trim', explode(',', $existing_value));
-                        } else {
-                            // First time only: create sequence
-                            $shuffle_array = $shuffle_instruments;
-                            shuffle($shuffle_array);
-
-                            // Apply limit if requested (keep behaviour analogous to surveys)
-                            if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($shuffle_instruments)) {
-                                $shuffle_array = array_slice($shuffle_array, 0, $shuffle_number);
-                            }
-
-                            // Save shuffled order if requested
-                            if (!empty($sequence_field)) {
-                                REDCap::saveData('array', [
-                                    $record => [
-                                        $sequence_event => [
-                                            $sequence_field => implode(", ", $shuffle_array)
-                                        ]
+                        // Save shuffled order if requested
+                        if (!empty($sequence_field)) {
+                            REDCap::saveData('array', [
+                                $record => [
+                                    $sequence_event => [
+                                        $sequence_field => implode(", ", $shuffle_array)
                                     ]
-                                ]);
-                            }
+                                ]
+                            ]);
                         }
                     }
 
@@ -227,7 +227,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     $data = REDCap::getData('array', $record, $order_field, $sequence_event);
                     $order_value = $data[$record][$sequence_event][$order_field] ?? '';
                     if (strlen(trim($order_value))) {
-                        $shuffle_array = array_map('trim', explode(',', $order_value));  
+                        $shuffle_array = array_map('trim', explode(',', $order_value));
                     }
                 }
             }
