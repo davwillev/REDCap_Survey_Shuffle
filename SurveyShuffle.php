@@ -139,15 +139,15 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
 
         for ($i = 0; $i < count($configs); $i++) {
             // Settings for this configuration
-            $shuffle_event = $this->getProjectSetting('shuffle-event')[$i];
-            $shuffle_type = $this->getProjectSetting('shuffle-type')[$i];
-            $entry_survey = $this->getProjectSetting('entry-survey')[$i]; // entry form
-            $shuffle_instruments = $this->getProjectSetting('shuffle-instruments')[$i];
-            $sequence_field = $this->getProjectSetting('sequence-field')[$i];
-            $sequence_field_event = $this->getProjectSetting('sequence-field-event')[$i];
-            $order_field = $this->getProjectSetting('order-field')[$i];
-            $order_field_event = $this->getProjectSetting('order-field-event')[$i];
-            $shuffle_number = $this->getProjectSetting('shuffle-number')[$i];
+            $shuffle_event         = $this->getProjectSetting('shuffle-event')[$i];
+            $shuffle_type          = $this->getProjectSetting('shuffle-type')[$i];
+            $entry_survey          = $this->getProjectSetting('entry-survey')[$i]; // entry form
+            $shuffle_instruments   = $this->getProjectSetting('shuffle-instruments')[$i];
+            $sequence_field        = $this->getProjectSetting('sequence-field')[$i];
+            $sequence_field_event  = $this->getProjectSetting('sequence-field-event')[$i];
+            $order_field           = $this->getProjectSetting('order-field')[$i];
+            $order_field_event     = $this->getProjectSetting('order-field-event')[$i];
+            $shuffle_number        = $this->getProjectSetting('shuffle-number')[$i];
 
             // Skip configs without entry form or shuffle list
             if (empty($entry_survey) || empty($shuffle_instruments)) continue;
@@ -178,7 +178,7 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         $shuffle_array = array_map('trim', explode(',', $existing_value));
                     } else {
                         // First time only: create sequence
-                        $shuffle_array = $shuffle_instruments;
+                        $shuffle_array = (array)$shuffle_instruments;
                         shuffle($shuffle_array);
 
                         // Apply limit if requested (keep behaviour analogous to surveys)
@@ -259,149 +259,147 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     }
                 }
 
-                if (!empty($next_form)) {
+                // Define the next URL outside of the JS block for cleaner access
+                $next_url = (!empty($next_form))
+                    ? APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}"
+                    : '';
 
-                    // Define the next URL outside of the JS block for cleaner access
-                    $next_url = APP_PATH_WEBROOT . "DataEntry/index.php?pid={$project_id}&page={$next_form}&id={$record}&event_id={$event_id}";
+                // Precompute server values for JS (no helper)
+                $hasSeqJs      = 'true';
+                $json_next_url = json_encode((string)$next_url, JSON_UNESCAPED_SLASHES);
 
-                    echo "
-                    <script>
+                echo "
+                <script>
+                // Use jQuery document ready function
+                $(function() {
+                    // Precomputed on the server for safe quoting
+                    var nextFormUrl   = {$json_next_url};
+                    var saveInProcess = false;  // guard for our own click/save flow
+                    var ajaxStarted   = false;  // track whether a save AJAX actually started
 
-                    // Use jQuery document ready function
-                    $(function() {
-                        // We define these variables outside the click handler to maintain their state
-                        var nextFormUrl   = '{$next_url}';
-                        var saveInProcess = false;
-                        var ajaxStarted   = false; // NEW: track whether a save AJAX actually started
+                    // Bind after REDCap has wired its own handlers
+                    $(window).on('load', function() {
+                        // Scope to this form's submit area only
+                        var area = $(\"#__SUBMITBUTTONS__-div\");
+                        if (area.data('shuffleWired')) return;  // idempotency guard
+                        area.data('shuffleWired', true);
 
-                        // Bind after REDCap has wired its own handlers
-                        $(window).on('load', function() {
-                            // Scope to this form's submit area only
-                            var area = $(\"#__SUBMITBUTTONS__-div\");
-                            if (area.data('shuffleWired')) return;  // idempotency guard
-                            area.data('shuffleWired', true);
+                        // If no next form (last in shuffled sequence), hide native Next and exit
+                        if (!nextFormUrl || !String(nextFormUrl).trim().length) {
+                            var nativeNext = area.find(\"[name='submit-btn-savenextform'], #submit-btn-savenextform, a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                            nativeNext.each(function(){
+                                var el = $(this);
+                                el.hide();                // hide the control itself
+                                el.closest('li').hide();  // hide dropdown <li> if applicable
+                            });
+                            return; // do not inject or hijack anything on the last shuffled form
+                        }
 
-                            // If no next form (last in shuffled sequence), hide native Next and exit
-                            if (!nextFormUrl || !String(nextFormUrl).trim().length) {
-                                var nativeNext = area.find(\"[name='submit-btn-savenextform'], #submit-btn-savenextform, a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
-                                nativeNext.each(function(){
-                                    var el = $(this);
-                                    el.hide();                // hide the control itself
-                                    el.closest('li').hide();  // hide dropdown <li> if applicable
-                                });
-                                return; // do not inject or hijack anything on the last shuffled form
+                        // Try native button first, then the dropdown <a>
+                        var btn  = area.find(\"[name='submit-btn-savenextform']\");
+                        if (!btn.length) {
+                            var btnLink = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                            if (btnLink.length) btn = btnLink;
+                        }
+
+                        // If neither exists, inject our own button
+                        if (!btn.length) {
+                            var container = area.find('.btn-group.nowrap');
+                            if (!container.length) container = area;
+
+                            if (!$('#submit-btn-shuffled-nextform').length) {
+                                var injected = $('<button class=\"btn btn-primaryrc\" ' +
+                                                'id=\"submit-btn-shuffled-nextform\" ' +
+                                                'type=\"button\" ' +
+                                                'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
+                                                '<span>Save & Go To Next Form</span></button>');
+                                container.prepend(injected);
+                                btn = injected;
                             }
-                            
-                            // Try native button first, then the dropdown <a>
-                            var btn  = area.find(\"[name='submit-btn-savenextform']\");
-                            if (!btn.length) {
-                                var btnLink = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
-                                if (btnLink.length) btn = btnLink;
-                            }
+                        }
 
-                            // If neither exists, inject our own button
-                            if (!btn.length) {
-                                var container = area.find('.btn-group.nowrap');
-                                if (!container.length) container = area;
+                        if (!btn.length) return;
 
-                                if (!$('#submit-btn-shuffled-nextform').length) {
-                                    var injected = $('<button class=\"btn btn-primaryrc\" ' +
-                                                    'id=\"submit-btn-shuffled-nextform\" ' +
-                                                    'type=\"button\" ' +
-                                                    'style=\"margin-bottom:2px;font-size:13px !important;padding:6px 8px;\">' +
-                                                    '<span>Save & Go To Next Form</span></button>');
-                                    container.prepend(injected);
-                                    btn = injected;
-                                }
-                            }
+                        // Hide any duplicate dropdown 'Next' item to avoid two different Next targets
+                        var dupDropdownNext = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
+                        if (dupDropdownNext.length && !btn.is(dupDropdownNext)) {
+                            dupDropdownNext.hide().closest('li').hide();
+                        }
 
-                            if (!btn.length) return;
+                        // Remove inline onclick that calls dataEntrySubmit(this)
+                        btn.attr('onclick','');
 
-                            // Hide any duplicate dropdown 'Next' item to avoid two different Next targets
-                            var dupDropdownNext = area.find(\"a#submit-btn-savenextform, a[name='submit-btn-savenextform']\");
-                            if (dupDropdownNext.length && !btn.is(dupDropdownNext)) {
-                                dupDropdownNext.hide().closest('li').hide();
-                            }
+                        // Remove any jQuery handlers, then add our own
+                        btn.off('click').on('click', function(e){
+                            e.preventDefault();
 
-                            // Remove inline onclick that calls dataEntrySubmit(this)
-                            btn.attr('onclick','');
+                            // Double-click guard
+                            if (saveInProcess) return;
+                            saveInProcess = true;
+                            ajaxStarted   = false;
 
-                            // Remove any jQuery handlers, then add our own
-                            btn.off('click').on('click', function(e){
-                                e.preventDefault();
-                                saveInProcess = true; // Flag that our save is starting
-                                ajaxStarted   = false; // reset before wiring listeners
-
-                                // Detect if the save AJAX actually starts
-                                $(document).one('ajaxSend.SurveyShuffleNext', function(event, jqxhr, settings) {
-                                    var isPost        = settings.type && settings.type.toUpperCase() === 'POST';
-                                    var hitsDataEntry = /\\/DataEntry\\/index\\.php/i.test(settings.url);
-
-                                    // Determine current pid
+                            // Detect if the save AJAX actually starts (our own attempt)
+                            $(document).one('ajaxSend.SurveyShuffleNext', function(event, jqxhr, settings) {
+                                try {
+                                    var isPost        = settings && settings.type && settings.type.toUpperCase() === 'POST';
+                                    var hitsDataEntry = settings && /\\/DataEntry\\/index\\.php/i.test(settings.url || '');
                                     var currPid = (typeof pid !== 'undefined') ? String(pid) : (function(){
                                         var m = (window.location.search || '').match(/[?&]pid=(\\d+)/);
                                         return m ? m[1] : '';
                                     })();
-                                    var hitsThisPid = currPid ? (settings.url.indexOf('pid=' + currPid) !== -1) : true;
+                                    var hitsThisPid = currPid ? ((settings.url || '').indexOf('pid=' + currPid) !== -1) : true;
+                                    if (isPost && hitsDataEntry && hitsThisPid) ajaxStarted = true;
+                                } catch (ex) {
+                                    // ignore; fallback timer covers us if needed
+                                }
+                            });
 
-                                    if (isPost && hitsDataEntry && hitsThisPid) {
-                                        ajaxStarted = true;
-                                    }
-                                });
-
-                                // 1. Set up the AJAX listener (must be done before triggering the save)
-                                // Monitors ALL completed AJAX requests on the page (namespaced + one-time to avoid conflicts)
-                                $(document).one('ajaxComplete.SurveyShuffleNext', function(event, xhr, settings) {
-                                    // Check if this is the form save URL and that our custom save process is active
-                                    var isPost        = settings.type && settings.type.toUpperCase() === 'POST';
-                                    var hitsDataEntry = /\\/DataEntry\\/index\\.php/i.test(settings.url);
-
-                                    // Determine current pid
+                            // Listen for the save finishing successfully
+                            $(document).one('ajaxComplete.SurveyShuffleNext', function(event, xhr, settings) {
+                                try {
+                                    var isPost        = settings && settings.type && settings.type.toUpperCase() === 'POST';
+                                    var hitsDataEntry = settings && /\\/DataEntry\\/index\\.php/i.test(settings.url || '');
                                     var currPid = (typeof pid !== 'undefined') ? String(pid) : (function(){
                                         var m = (window.location.search || '').match(/[?&]pid=(\\d+)/);
                                         return m ? m[1] : '';
                                     })();
-                                    var hitsThisPid = currPid ? (settings.url.indexOf('pid=' + currPid) !== -1) : true;
+                                    var hitsThisPid = currPid ? ((settings.url || '').indexOf('pid=' + currPid) !== -1) : true;
 
-                                    // Ensure it was a success by checking the response status
-                                    if (saveInProcess && isPost && hitsDataEntry && hitsThisPid && xhr.status === 200) {
-                                        // 3. SAVE COMPLETE: Redirect the user
-                                        saveInProcess = false; // Reset flag
-                                        window.location.href = nextFormUrl;
-                                    }
-                                });
-
-                                // 2. Trigger the native save function (start the AJAX save process)
-                                // Prefer REDCap's Save & Stay (avoid Save & Exit unless necessary)
-                                var saveStayBtn  = area.find(\"button[name='submit-btn-savecontinue']\");
-                                var saveStayLink = area.find(\"a#submit-btn-savecontinue\"); // some builds use an <a> in the dropdown
-
-                                if (saveStayBtn.length) {
-                                    saveStayBtn.trigger('click');
-                                } else if (saveStayLink.length) {
-                                    saveStayLink.trigger('click');
-                                } else {
-                                    // Last resort
-                                    area.find(\"button[name='submit-btn-saverecord']\").trigger('click');
-                                }
-
-                                // Optional safety fallback if ajaxComplete never fires (older builds)
-                                setTimeout(function () {
-                                    // Only redirect if a save AJAX actually started (prevents redirect on validation failure)
-                                    if (saveInProcess && ajaxStarted) {
+                                    if (saveInProcess && ajaxStarted && isPost && hitsDataEntry && hitsThisPid && xhr.status === 200) {
                                         saveInProcess = false;
                                         window.location.href = nextFormUrl;
                                     }
-                                }, 2500);
-
-                                // The redirect logic is handled by the ajaxComplete listener.
+                                } catch (ex) {
+                                    // ignore; fallback timer covers us if needed
+                                }
                             });
+
+                            // Trigger the native save (prefer Save & Stay)
+                            var saveStayBtn  = area.find(\"button[name='submit-btn-savecontinue']\");
+                            var saveStayLink = area.find(\"a#submit-btn-savecontinue\"); // some builds use an <a> in the dropdown
+
+                            if (saveStayBtn.length) {
+                                saveStayBtn.trigger('click');
+                            } else if (saveStayLink.length) {
+                                saveStayLink.trigger('click');
+                            } else {
+                                // Last resort
+                                area.find(\"button[name='submit-btn-saverecord']\").trigger('click');
+                            }
+
+                            // Safety fallback (older builds where ajaxComplete may not fire).
+                            // Crucially: only redirect if a save POST actually began.
+                            setTimeout(function () {
+                                if (saveInProcess && ajaxStarted) {
+                                    saveInProcess = false;
+                                    window.location.href = nextFormUrl;
+                                }
+                            }, 2500);
                         });
                     });
-
-                    </script>";
-                }
-            }              
+                });
+                </script>";
+            }
         }
     }
 }
