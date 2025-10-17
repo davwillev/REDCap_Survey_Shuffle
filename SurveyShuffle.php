@@ -205,7 +205,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                         $order_value = $data[$record][$sequence_event][$order_field] ?? '';
                         if (strlen($order_value)) {
                             // Match survey delimiter behaviour
-                            $shuffle_array = explode(", ", $order_value);
+                            //$shuffle_array = explode(", ", $order_value);
+                            $shuffle_array = array_filter(array_map('trim', explode(',', $order_value)));
                         }
                     }
                 }
@@ -219,7 +220,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     $sequence_value = $data[$record][$sequence_event][$sequence_field] ?? '';
                     if (strlen($sequence_value)) {
                         // Match survey delimiter behaviour
-                        $shuffle_array = explode(", ", $sequence_value);
+                        //$shuffle_array = explode(", ", $sequence_value);
+                        $shuffle_array = array_filter(array_map('trim', explode(',', $sequence_value)));
                     }
                 } elseif ($shuffle_type === 'field' && !empty($order_field)) {
                     // Fallback for 'From field' when sequence_field is not used
@@ -227,7 +229,8 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
                     $data = REDCap::getData('array', $record, $order_field, $sequence_event);
                     $order_value = $data[$record][$sequence_event][$order_field] ?? '';
                     if (strlen(trim($order_value))) {
-                        $shuffle_array = array_map('trim', explode(',', $order_value));
+                        //$shuffle_array = array_map('trim', explode(',', $order_value));
+                        $shuffle_array = array_filter(array_map('trim', explode(',', $order_value)));
                     }
                 }
             }
