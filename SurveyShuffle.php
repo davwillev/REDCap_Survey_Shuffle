@@ -174,7 +174,7 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
 
                             // REMOVE APPEND: do not append per-completion when a sequence-field is configured
                             if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, let's do so.
-                                // In the new behaviour we only store once at entry; we therefore skip appending here.
+                                // We only store once at entry; we therefore skip appending here.
                                 // (Left intentionally as a no-op to preserve original comment structure.)
                             };
                         }
@@ -353,6 +353,15 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
                     echo "<!-- SurveyShuffle SEQ: {$seqComment} -->\n";
                     echo "<!-- Shuffle sequence for {$record}: {$seqComment} -->\n";
 
+                    // Flags for UI suppression(cheap and avoids relying on local scope)
+                    $idx_for_flags = ($instrument === $entry_survey) ? false : array_search($instrument, $clean_array, true);
+                    $in_block = ($instrument === $entry_survey) ? true : ($idx_for_flags !== false);
+                    $has_block_next = ($instrument === $entry_survey)
+                        ? isset($clean_array[0])
+                        : ($idx_for_flags !== false && isset($clean_array[$idx_for_flags + 1]));
+                    $suppress_native = ($in_block && $has_block_next);
+                    // --------------------------------------------------------
+
                     echo "
                     <script>
                     (function() {
@@ -361,6 +370,7 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
 
                         var HIJACK_DELAY_MS = 400;
                         var REDIRECT_DELAY_MS = 800;
+                        var SUPPRESS_NATIVE = " . json_encode($suppress_native) . ";
 
                         function doSaveStay(\$originBtn) {
                             // Try the native function first
@@ -396,6 +406,22 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
                             });
                         }
 
+                        function hideNativeNext(\$boundNext) {
+                            // Hide the vanilla 'Save & Go To Next Form' items in the dropdown,
+                            // but do NOT hide the element we're binding to (if any).
+                            var \$items = $(\".btn-group .dropdown-menu [name='submit-btn-savenextform'], \
+                                            .btn-group .dropdown-menu #submit-btn-savenextform, \
+                                            .btn-group .dropdown-menu [data-action='savenextform']\");
+                            if (\$boundNext && \$boundNext.length) {
+                                \$items = \$items.not(\$boundNext);
+                            }
+                            \$items.each(function(){
+                                var \$it = $(this);
+                                \$it.closest('li, .dropdown-item').hide();
+                                \$it.hide();
+                            });
+                        }
+
                         setTimeout(function() {
                             var \$nextFormBtn = $(\"[name='submit-btn-savenextform']\");
 
@@ -415,16 +441,20 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
 
                             if (\$nextFormBtn.length) {
                                 bindHandler(\$nextFormBtn);
+                                if (SUPPRESS_NATIVE) hideNativeNext(\$nextFormBtn);
                             } else {
                                 // Fallback: bind our behaviour to Save & Stay itself (but avoid recursion via doSaveStay)
                                 var \$saveStayBtn = $(\"#submit-btn-savecontinue, [name='submit-btn-savecontinue']\").first();
-                                if (\$saveStayBtn.length) bindHandler(\$saveStayBtn);
+                                if (\$saveStayBtn.length) {
+                                    bindHandler(\$saveStayBtn);
+                                    if (SUPPRESS_NATIVE) hideNativeNext(null);
+                                }
                             }
                         }, HIJACK_DELAY_MS);
                     })();
                     </script>
                     ";
-                    } else {
+                } else {
                     // Sequence exhausted: leave page behaviour unchanged (optional note)
                     echo "<!-- SurveyShuffle DIAG: no-next-form (end-of-sequence) for record {$record} on {$instrument} -->\n";
                 }
