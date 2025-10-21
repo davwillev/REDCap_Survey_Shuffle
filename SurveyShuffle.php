@@ -69,156 +69,155 @@ class SurveyShuffle extends \ExternalModules\AbstractExternalModule {
         return $order;
     }
 
-function redcap_survey_complete($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance)
-/* function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance) // For debugging */
-{
-    // Evaluate project context (surveys/forms/both)
-    $context = $this->getProjectSetting('shuffle-context');
-    if ($context != 'survey' && $context != 'both') {
-        return;
-    }
-
-    $configs = $this -> getProjectSetting('configs');
-
-    for ($i = 0; $i < count($configs); $i++){ // Loop over each new configuration
-        //Retrieve module configuration settings
-        $shuffle_event = $this -> getProjectSetting('shuffle-event')[$i];
-        $shuffle_type = $this -> getProjectSetting('shuffle-type')[$i];
-        $entry_survey = $this -> getProjectSetting('entry-survey')[$i];
-        $descriptive_text = $this -> getProjectSetting('descriptive-text')[$i];
-        $shuffle_instruments = $this -> getProjectSetting('shuffle-instruments')[$i];
-        $order_field = $this -> getProjectSetting('order-field')[$i];
-        $order_field_event = $this -> getProjectSetting('order-field-event')[$i];
-        $shuffle_number = $this -> getProjectSetting('shuffle-number')[$i];
-        $exit_survey = $this -> getProjectSetting('exit-survey')[$i];
-        $sequence_field = $this -> getProjectSetting('sequence-field')[$i];
-        $sequence_field_event = $this -> getProjectSetting('sequence-field-event')[$i];
-
-        // Exit if entry survey is not set, or if no shuffle instruments are defined
-        if (empty($entry_survey) || empty($shuffle_instruments)) {
-            //return;
-            continue;
+    function redcap_survey_complete($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance)
+    /* function redcap_survey_page($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance) // For debugging */
+    {
+        // Evaluate project context (surveys/forms/both)
+        $context = $this->getProjectSetting('shuffle-context');
+        if ($context != 'survey' && $context != 'both') {
+            return;
         }
 
-        if (is_null($shuffle_event) || $event_id == $shuffle_event ) { // proceed if the current event is the config event, or if no event is specified
-            if (is_null($shuffle_type) || $shuffle_type == "random") { // proceed if the shuffle type is set to shuffle, or if no type is specified (for backwards compatibility)
+        $configs = $this -> getProjectSetting('configs');
 
-                // Set the number of instruments to shuffle to the number requested, or else the number of instruments being shuffled
-                $shuffle_number = (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0) ? $shuffle_number : count($shuffle_instruments);
+        for ($i = 0; $i < count($configs); $i++){ // Loop over each new configuration
+            //Retrieve module configuration settings
+            $shuffle_event = $this -> getProjectSetting('shuffle-event')[$i];
+            $shuffle_type = $this -> getProjectSetting('shuffle-type')[$i];
+            $entry_survey = $this -> getProjectSetting('entry-survey')[$i];
+            $descriptive_text = $this -> getProjectSetting('descriptive-text')[$i];
+            $shuffle_instruments = $this -> getProjectSetting('shuffle-instruments')[$i];
+            $order_field = $this -> getProjectSetting('order-field')[$i];
+            $order_field_event = $this -> getProjectSetting('order-field-event')[$i];
+            $shuffle_number = $this -> getProjectSetting('shuffle-number')[$i];
+            $exit_survey = $this -> getProjectSetting('exit-survey')[$i];
+            $sequence_field = $this -> getProjectSetting('sequence-field')[$i];
+            $sequence_field_event = $this -> getProjectSetting('sequence-field-event')[$i];
 
-                // Since this module fires on the survey_complete hook, we have to know if the survey that was just completed was one that should then go to a random next one. Those are: the list of shuffled surveys, the entry survey is it is set, or the first survey if it is not.
-                $trigger_instruments = $shuffle_instruments;
-                $first_instrument = array_key_first(REDCap::getInstrumentNames());
-                (is_null($entry_survey)) ? array_push($trigger_instruments,$first_instrument) : array_push($trigger_instruments,$entry_survey);
+            // Exit if entry survey is not set, or if no shuffle instruments are defined
+            if (empty($entry_survey) || empty($shuffle_instruments)) {
+                //return;
+                continue;
+            }
 
-                if (in_array($instrument,$trigger_instruments)) { // Stop if the current instrument should *not* lead to a shuffled instrument
+            if (is_null($shuffle_event) || $event_id == $shuffle_event ) { // proceed if the current event is the config event, or if no event is specified
+                if (is_null($shuffle_type) || $shuffle_type == "random") { // proceed if the shuffle type is set to shuffle, or if no type is specified (for backwards compatibility)
 
-                    $completed_shuffle_instruments = array(); // Instantiate an array for completed instruments
+                    // Set the number of instruments to shuffle to the number requested, or else the number of instruments being shuffled
+                    $shuffle_number = (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0) ? $shuffle_number : count($shuffle_instruments);
 
-                    // Loop through shuffle instruments and remove those that are complete, adding them to the completed instruments array
-                    foreach($shuffle_instruments as $inst) {
-                        if (REDCap::getData('array',$record,$inst.'_complete',$event_id)[$record][$event_id][$inst.'_complete'] == 2) {
-                            unset($shuffle_instruments[array_search($inst,$shuffle_instruments)]);
-                            array_push($completed_shuffle_instruments, $inst);
-                        };
-                    }
+                    // Since this module fires on the survey_complete hook, we have to know if the survey that was just completed was one that should then go to a random next one. Those are: the list of shuffled surveys, the entry survey is it is set, or the first survey if it is not.
+                    $trigger_instruments = $shuffle_instruments;
+                    $first_instrument = array_key_first(REDCap::getInstrumentNames());
+                    (is_null($entry_survey)) ? array_push($trigger_instruments,$first_instrument) : array_push($trigger_instruments,$entry_survey);
 
-                    // --- Minimal addition begins: honour a stored fixed sequence if present; otherwise create it once at entry ---
-                    $stored_sequence = array();
-                    if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, prefer a previously stored full sequence
-                        $sequence_field_event = $sequence_field_event ?? $event_id; // If no event is specified for sequence_field_event, use the current event
-                        $seq_data = REDCap::getData('array',$record,$sequence_field,$sequence_field_event);
-                        $seq_val  = isset($seq_data[$record][$sequence_field_event][$sequence_field]) ? trim((string)$seq_data[$record][$sequence_field_event][$sequence_field]) : '';
-                        if ($seq_val !== '') {
-                            $stored_sequence = array_map('trim', explode(', ', $seq_val));
-                        } else if ($instrument === $entry_survey) {
-                            // First time at entry: create and persist the full order once (respecting shuffle_number)
-                            $ordered = $shuffle_instruments;
-                            shuffle($ordered);
-                            if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($ordered)) {
-                                $ordered = array_slice($ordered, 0, (int)$shuffle_number);
-                            }
-                            // Double-check for race: only save if still empty
-                            $check = REDCap::getData('array',$record,$sequence_field,$sequence_field_event);
-                            $check_val = isset($check[$record][$sequence_field_event][$sequence_field]) ? trim((string)$check[$record][$sequence_field_event][$sequence_field]) : '';
-                            if ($check_val === '') {
-                                REDCap::saveData('array', [
-                                    $record => [
-                                        $sequence_field_event => [
-                                            $sequence_field => implode(', ', $ordered)
-                                        ]
-                                    ]
-                                ]);
-                                $stored_sequence = $ordered;
-                            } else {
-                                $stored_sequence = array_map('trim', explode(', ', $check_val));
-                            }
-                        }
-                    }
-                    // --- Minimal addition ends ---
+                    if (in_array($instrument,$trigger_instruments)) { // Stop if the current instrument should *not* lead to a shuffled instrument
 
-                    if (count($completed_shuffle_instruments) < $shuffle_number) { // If we're not done displaying surveys
-                        if (!empty($stored_sequence)) {
-                            // Follow stored sequence: pick first not-yet-completed instrument
-                            $remaining_in_order = array_values(array_diff($stored_sequence, $completed_shuffle_instruments));
-                            $next_survey = $remaining_in_order[0] ?? null;
-                            if (empty($next_survey)) {
-                                // Fallback to original behaviour if something unexpected happens
-                                shuffle($shuffle_instruments);
-                                $next_survey = $shuffle_instruments[0] ?? null;
-                            }
-                        } else {
-                            // Original behaviour (no persistence): random from remaining
-                            shuffle($shuffle_instruments);
-                            $next_survey = $shuffle_instruments[0]; // Pick a remaining instrument at random
+                        $completed_shuffle_instruments = array(); // Instantiate an array for completed instruments
 
-                            // REMOVE APPEND: do not append per-completion when a sequence-field is configured
-                            if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, let's do so.
-                                // We only store once at entry; we therefore skip appending here.
-                                // (Left intentionally as a no-op to preserve original comment structure.)
+                        // Loop through shuffle instruments and remove those that are complete, adding them to the completed instruments array
+                        foreach($shuffle_instruments as $inst) {
+                            if (REDCap::getData('array',$record,$inst.'_complete',$event_id)[$record][$event_id][$inst.'_complete'] == 2) {
+                                unset($shuffle_instruments[array_search($inst,$shuffle_instruments)]);
+                                array_push($completed_shuffle_instruments, $inst);
                             };
                         }
 
-                        if (!empty($next_survey)) {
-                            $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
-                            header('Location: '.$next_survey_link); // And direct the respondent there
-                            $this->exitAfterHook();
+                        // Minimal addition since v2.01: honour a stored fixed sequence if present; otherwise create it once at entry
+                        $stored_sequence = array();
+                        if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, prefer a previously stored full sequence
+                            $sequence_field_event = $sequence_field_event ?? $event_id; // If no event is specified for sequence_field_event, use the current event
+                            $seq_data = REDCap::getData('array',$record,$sequence_field,$sequence_field_event);
+                            $seq_val  = isset($seq_data[$record][$sequence_field_event][$sequence_field]) ? trim((string)$seq_data[$record][$sequence_field_event][$sequence_field]) : '';
+                            if ($seq_val !== '') {
+                                $stored_sequence = array_map('trim', explode(', ', $seq_val));
+                            } else if ($instrument === $entry_survey) {
+                                // First time at entry: create and persist the full order once (respecting shuffle_number)
+                                $ordered = $shuffle_instruments;
+                                shuffle($ordered);
+                                if (!is_null($shuffle_number) && is_numeric($shuffle_number) && $shuffle_number > 0 && $shuffle_number < count($ordered)) {
+                                    $ordered = array_slice($ordered, 0, (int)$shuffle_number);
+                                }
+                                // Double-check for race: only save if still empty
+                                $check = REDCap::getData('array',$record,$sequence_field,$sequence_field_event);
+                                $check_val = isset($check[$record][$sequence_field_event][$sequence_field]) ? trim((string)$check[$record][$sequence_field_event][$sequence_field]) : '';
+                                if ($check_val === '') {
+                                    REDCap::saveData('array', [
+                                        $record => [
+                                            $sequence_field_event => [
+                                                $sequence_field => implode(', ', $ordered)
+                                            ]
+                                        ]
+                                    ]);
+                                    $stored_sequence = $ordered;
+                                } else {
+                                    $stored_sequence = array_map('trim', explode(', ', $check_val));
+                                }
+                            }
                         }
-                    } else { // If we're done
-                        if (!is_null($exit_survey)) { // Test if there's a configured end-survey
-                            $exit_survey_link = REDCap::getSurveyLink($record, $exit_survey, $event_id);
-                            header('Location: '.$exit_survey_link); // Go there
-                            $this->exitAfterHook();
-                        };
-                    }; // Otherwise do whatever the survey termination options have configured.
+
+                        if (count($completed_shuffle_instruments) < $shuffle_number) { // If we're not done displaying surveys
+                            if (!empty($stored_sequence)) {
+                                // Follow stored sequence: pick first not-yet-completed instrument
+                                $remaining_in_order = array_values(array_diff($stored_sequence, $completed_shuffle_instruments));
+                                $next_survey = $remaining_in_order[0] ?? null;
+                                if (empty($next_survey)) {
+                                    // Fallback to original behaviour if something unexpected happens
+                                    shuffle($shuffle_instruments);
+                                    $next_survey = $shuffle_instruments[0] ?? null;
+                                }
+                            } else {
+                                // Original behaviour (no persistence): random from remaining
+                                shuffle($shuffle_instruments);
+                                $next_survey = $shuffle_instruments[0]; // Pick a remaining instrument at random
+
+                                // REMOVE APPEND: do not append per-completion when a sequence-field is configured
+                                if (!is_null($sequence_field)) { // If we're planning on storing the sequence in a field, let's do so.
+                                    // We only store once at entry; we therefore skip appending here.
+                                    // (Left intentionally as a no-op to preserve original comment structure.)
+                                };
+                            }
+
+                            if (!empty($next_survey)) {
+                                $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
+                                header('Location: '.$next_survey_link); // And direct the respondent there
+                                $this->exitAfterHook();
+                            }
+                        } else { // If we're done
+                            if (!is_null($exit_survey)) { // Test if there's a configured end-survey
+                                $exit_survey_link = REDCap::getSurveyLink($record, $exit_survey, $event_id);
+                                header('Location: '.$exit_survey_link); // Go there
+                                $this->exitAfterHook();
+                            };
+                        }; // Otherwise do whatever the survey termination options have configured.
+                    };
+                } else if ($shuffle_type == "field") { // If the shuffle type is set to a predetermined order from a field
+                    $order_field_event = $order_field_event ?? $event_id; // If no event is specified for sequence_field_event, use the current event
+                    // User REDCap::getData to get the order field's value
+                    $order_field_data = REDCap::getData('array',$record,$order_field,$order_field_event)[$record][$order_field_event][$order_field];
+                    // Split this by ", " to get an ordered array of instruments
+                    $order_field_data = explode(", ",$order_field_data);
+                    // If the current instrument is the entry survey, then set the redirect to the first instrument in the order field
+                    if ($instrument == $entry_survey) {
+                        $next_survey = $order_field_data[0];
+                        $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
+                        header('Location: '.$next_survey_link); // And direct the respondent there
+                        $this->exitAfterHook();
+                    } else if ($instrument != $order_field_data[count($order_field_data)-1]) { // If the current instrument is not the last instrument in the order field, then set the redirect to the next instrument in the order field
+                        $next_survey = $order_field_data[array_search($instrument,$order_field_data)+1];
+                        $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
+                        header('Location: '.$next_survey_link); // And direct the respondent there
+                        $this->exitAfterHook();
+                    } else if (!is_null($exit_survey)) { // If the current instrument is the last instrument in the order field and there is an exit survey configured, then set the redirect to the exit survey
+                        $next_survey = $exit_survey;
+                        $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
+                        header('Location: '.$next_survey_link); // And direct the respondent there
+                        $this->exitAfterHook();
+                    }; // Otherwise if no exist survey is configured and the sequence has been exhausted, do whatever the survey termination options have configured.
                 };
-            } else if ($shuffle_type == "field") { // If the shuffle type is set to a predetermined order from a field
-                $order_field_event = $order_field_event ?? $event_id; // If no event is specified for sequence_field_event, use the current event
-                // User REDCap::getData to get the order field's value
-                $order_field_data = REDCap::getData('array',$record,$order_field,$order_field_event)[$record][$order_field_event][$order_field];
-                // Split this by ", " to get an ordered array of instruments
-                $order_field_data = explode(", ",$order_field_data);
-                // If the current instrument is the entry survey, then set the redirect to the first instrument in the order field
-                if ($instrument == $entry_survey) {
-                    $next_survey = $order_field_data[0];
-                    $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
-                    header('Location: '.$next_survey_link); // And direct the respondent there
-                    $this->exitAfterHook();
-                } else if ($instrument != $order_field_data[count($order_field_data)-1]) { // If the current instrument is not the last instrument in the order field, then set the redirect to the next instrument in the order field
-                    $next_survey = $order_field_data[array_search($instrument,$order_field_data)+1];
-                    $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
-                    header('Location: '.$next_survey_link); // And direct the respondent there
-                    $this->exitAfterHook();
-                } else if (!is_null($exit_survey)) { // If the current instrument is the last instrument in the order field and there is an exit survey configured, then set the redirect to the exit survey
-                    $next_survey = $exit_survey;
-                    $next_survey_link = REDCap::getSurveyLink($record, $next_survey, $event_id); // Get the next survey's link
-                    header('Location: '.$next_survey_link); // And direct the respondent there
-                    $this->exitAfterHook();
-                }; // Otherwise if no exist survey is configured and the sequence has been exhausted, do whatever the survey termination options have configured.
-            };
+            }
         }
     }
-}
 
     /**
      * Runs when a data entry form is opened (top of form).
@@ -289,7 +288,15 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
             } else {
 
                 // NON-ENTRY FORMS: retrieve stored sequence (previously saved)
-                if (!empty($sequence_field)) {
+                if ($shuffle_type == 'field' && !empty($order_field)) {
+                    $sequence_event = $order_field_event ?? $event_id;
+                    $data = REDCap::getData('array', $record, $order_field, $sequence_event);
+                    $order_value = $data[$record][$sequence_event][$order_field] ?? '';
+                    if (strlen($order_value)) {
+                        // Match survey delimiter behaviour
+                        $shuffle_array = explode(", ", $order_value);
+                    }
+                } else if (!empty($sequence_field)) {
                     $sequence_event = $sequence_field_event ?? $event_id;
                     $data = REDCap::getData('array', $record, $sequence_field, $sequence_event);
                     $sequence_value = $data[$record][$sequence_event][$sequence_field] ?? '';
@@ -372,6 +379,19 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
                         var REDIRECT_DELAY_MS = 800;
                         var SUPPRESS_NATIVE = " . json_encode($suppress_native) . ";
 
+                        // Shared helper (idempotent) to hide drop-down Next option
+                        window.__SS_hideNativeNext = window.__SS_hideNativeNext || function(bound){
+                            var \$items = $(\".btn-group .dropdown-menu [name='submit-btn-savenextform'], \
+                                             .btn-group .dropdown-menu #submit-btn-savenextform, \
+                                             .btn-group .dropdown-menu [data-action='savenextform']\");
+                            if (bound && bound.length) \$items = \$items.not(bound);
+                            \$items.each(function(){
+                                var \$it = $(this);
+                                \$it.closest('li, .dropdown-item').hide();
+                                \$it.hide();
+                            });
+                        };
+
                         function doSaveStay(\$originBtn) {
                             // Try the native function first
                             if (typeof dataEntrySubmit === 'function') {
@@ -406,24 +426,9 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
                             });
                         }
 
-                        function hideNativeNext(\$boundNext) {
-                            // Hide the vanilla 'Save & Go To Next Form' items in the dropdown,
-                            // but do NOT hide the element we're binding to (if any).
-                            var \$items = $(\".btn-group .dropdown-menu [name='submit-btn-savenextform'], \
-                                            .btn-group .dropdown-menu #submit-btn-savenextform, \
-                                            .btn-group .dropdown-menu [data-action='savenextform']\");
-                            if (\$boundNext && \$boundNext.length) {
-                                \$items = \$items.not(\$boundNext);
-                            }
-                            \$items.each(function(){
-                                var \$it = $(this);
-                                \$it.closest('li, .dropdown-item').hide();
-                                \$it.hide();
-                            });
-                        }
-
                         setTimeout(function() {
-                            var \$nextFormBtn = $(\"[name='submit-btn-savenextform']\");
+                            //var \$nextFormBtn = $(\"[name='submit-btn-savenextform']\");
+                            var \$nextFormBtn = $(\"[name='submit-btn-savenextform'], #submit-btn-savenextform, [data-action='savenextform']\");
 
                             if (!\$nextFormBtn.length) {
                                 var \$container = $(\"#__SUBMITBUTTONS__-div\");
@@ -441,13 +446,13 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
 
                             if (\$nextFormBtn.length) {
                                 bindHandler(\$nextFormBtn);
-                                if (SUPPRESS_NATIVE) hideNativeNext(\$nextFormBtn);
+                                if (SUPPRESS_NATIVE) window.__SS_hideNativeNext(\$nextFormBtn);
                             } else {
                                 // Fallback: bind our behaviour to Save & Stay itself (but avoid recursion via doSaveStay)
                                 var \$saveStayBtn = $(\"#submit-btn-savecontinue, [name='submit-btn-savecontinue']\").first();
                                 if (\$saveStayBtn.length) {
                                     bindHandler(\$saveStayBtn);
-                                    if (SUPPRESS_NATIVE) hideNativeNext(null);
+                                    if (SUPPRESS_NATIVE) window.__SS_hideNativeNext(null);
                                 }
                             }
                         }, HIJACK_DELAY_MS);
@@ -457,6 +462,33 @@ function redcap_survey_complete($project_id, $record, $instrument, $event_id, $g
                 } else {
                     // Sequence exhausted: leave page behaviour unchanged (optional note)
                     echo "<!-- SurveyShuffle DIAG: no-next-form (end-of-sequence) for record {$record} on {$instrument} -->\n";
+
+                    // End-of-block AND no vanilla next instrument -> hide dropdown item too
+                    $idx_endcheck = array_search($instrument, $clean_array, true);
+                    $at_block_end = ($idx_endcheck !== false) && !isset($clean_array[$idx_endcheck + 1]);
+
+                    $native_index2 = array_flip($native_order);
+                    $max_idx2 = -1;
+                    foreach ($clean_array as $f2) {
+                        if (isset($native_index2[$f2])) $max_idx2 = max($max_idx2, $native_index2[$f2]);
+                    }
+                    $has_native_after_block = ($max_idx2 >= 0 && isset($native_order[$max_idx2 + 1]));
+
+                    if ($at_block_end && !$has_native_after_block) {
+                        echo "
+                        <script>(function(){
+                            // Reuse helper; define a tiny fallback if not present
+                            var hide = window.__SS_hideNativeNext || function(bound){
+                                var \$items = $(\".btn-group .dropdown-menu [name='submit-btn-savenextform'], \
+                                                 .btn-group .dropdown-menu #submit-btn-savenextform, \
+                                                 .btn-group .dropdown-menu [data-action='savenextform']\");
+                                if (bound && bound.length) \$items = \$items.not(bound);
+                                \$items.each(function(){ var \$it=$(this); \$it.closest('li, .dropdown-item').hide(); \$it.hide(); });
+                            };
+                            hide(null);
+                        })();</script>
+                        ";
+                    }
                 }
             }
         }
